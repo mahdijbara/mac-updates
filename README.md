@@ -25,11 +25,11 @@ This repository solves that by acting as a lightweight software distribution sou
 
 
 
-READY TO RUN SCRIPT WITH CHANGING URL ONLY TO UPDATE
+READY TO RUN SCRIPT FOR CLAUDE. MAKE SURE TO CHANGE URLS AND NAMES BASED ON NEEDS
 
 #!/bin/bash
 
-# Claude DMG direct GitHub release link
+# DMG direct GitHub release link change link and names based on installer
 URL="https://github.com/mahdijbara/mac-updates/releases/download/v1.14271.0/Claude.dmg"
 
 TMP_FILE="/tmp/Claude.dmg"
