@@ -17,9 +17,12 @@ jobs:
       - name: Get latest Claude DMG URL and version
         id: anthropic
         run: |
-          # Follow the redirect to get the actual DMG URL (contains version in filename)
-          DMG_URL=$(curl -sI "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect" \
-            | grep -i "^location:" | tr -d '\r' | awk '{print $2}')
+          # Follow all redirects and capture the final URL
+          DMG_URL=$(curl -sL \
+            -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
+            -o /dev/null \
+            -w '%{url_effective}' \
+            "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect")
 
           if [ -z "$DMG_URL" ]; then
             echo "ERROR: Could not resolve Claude DMG redirect URL"
