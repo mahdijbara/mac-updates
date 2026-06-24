@@ -1,0 +1,109 @@
+name: Update Claude Release
+
+on:
+  schedule:
+    # Runs every day at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-update:
+    runs-on: macos-latest
+    steps:
+      - name: Get latest Claude DMG URL and version
+        id: anthropic
+        run: |
+          # Follow the redirect to get the actual DMG URL (contains version in filename)
+          DMG_URL=$(curl -sI "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect" \
+            | grep -i "^location:" | tr -d '\r' | awk '{print $2}')
+
+          if [ -z "$DMG_URL" ]; then
+            echo "ERROR: Could not resolve Claude DMG redirect URL"
+            exit 1
+          fi
+
+          echo "Resolved DMG URL: $DMG_URL"
+
+          # Extract version from filename, e.g. Claude-0.10.3-universal.dmg → 0.10.3
+          VERSION=$(basename "$DMG_URL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          if [ -z "$VERSION" ]; then
+            # Fallback: store the full URL hash as a change detector
+            VERSION=$(echo "$DMG_URL" | md5 | head -c 12)
+            echo "Could not parse semver; using URL hash as version: $VERSION"
+          fi
+
+          echo "dmg_url=$DMG_URL" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"  >> "$GITHUB_OUTPUT"
+          echo "Latest Claude version: $VERSION"
+
+      - name: Get current release version
+        id: current
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the current release body to read the stored version
+          BODY=$(gh release view latest --repo "${{ github.repository }}" --json body -q '.body')
+          echo "Current release body: $BODY"
+
+          # Try to parse a version we previously wrote (format: "Version: X.Y.Z")
+          CURRENT=$(echo "$BODY" | grep -oE 'Version: [0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk '{print $2}')
+          echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current stored version: $CURRENT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          NEW="${{ steps.anthropic.outputs.version }}"
+          OLD="${{ steps.current.outputs.current_version }}"
+          echo "Comparing: old=$OLD  new=$NEW"
+          if [ "$NEW" = "$OLD" ]; then
+            echo "No update needed."
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Update needed: $OLD → $NEW"
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download new Claude.dmg
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          echo "Downloading Claude.dmg from ${{ steps.anthropic.outputs.dmg_url }} ..."
+          curl -L --progress-bar \
+            -o Claude.dmg \
+            "${{ steps.anthropic.outputs.dmg_url }}"
+          ls -lh Claude.dmg
+
+      - name: Update GitHub release
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.anthropic.outputs.version }}"
+          DATE=$(date -u +"%Y-%m-%d")
+
+          # Delete the old Claude.dmg asset (gh release upload with --clobber handles this)
+          gh release upload latest Claude.dmg \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+          # Update release body with new version and date
+          gh release edit latest \
+            --repo "${{ github.repository }}" \
+            --notes "Version: ${VERSION}
+Last updated: ${DATE}
+
+macOS universal (Apple Silicon + Intel) build of the Claude desktop app.
+
+Download link: https://github.com/${{ github.repository }}/releases/download/latest/Claude.dmg"
+
+          echo "Release updated to version $VERSION"
+
+      - name: No update needed
+        if: steps.compare.outputs.needs_update == 'false'
+        run: |
+          echo "Claude is already up to date (version ${{ steps.current.outputs.current_version }}). Nothing to do."
