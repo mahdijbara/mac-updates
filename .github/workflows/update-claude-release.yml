@@ -65,7 +65,7 @@ jobs:
             echo "No update needed."
             echo "needs_update=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Update needed: $OLD → $NEW"
+            echo "Update needed: $OLD -> $NEW"
             echo "needs_update=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -92,14 +92,11 @@ jobs:
             --clobber
 
           # Update release body with new version and date
+          NOTES="Version: ${VERSION}\nLast updated: ${DATE}\n\nmacOS universal (Apple Silicon + Intel) build of the Claude desktop app.\n\nDownload link: https://github.com/${{ github.repository }}/releases/download/latest/Claude.dmg"
+          printf '%b' "$NOTES" > release_notes.md
           gh release edit latest \
             --repo "${{ github.repository }}" \
-            --notes "Version: ${VERSION}
-Last updated: ${DATE}
-
-macOS universal (Apple Silicon + Intel) build of the Claude desktop app.
-
-Download link: https://github.com/${{ github.repository }}/releases/download/latest/Claude.dmg"
+            --notes-file release_notes.md
 
           echo "Release updated to version $VERSION"
 
