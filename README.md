@@ -30,7 +30,7 @@ READY TO RUN SCRIPT FOR CLAUDE. MAKE SURE TO CHANGE URLS AND NAMES BASED ON NEED
 #!/bin/bash
 
 # DMG direct GitHub release link change link and names based on installer
-URL="https://github.com/mahdijbara/mac-updates/releases/download/v1.14271.0/Claude.dmg"
+URL="https://github.com/mahdijbara/mac-updates/releases/download/latest/Claude.dmg"
 
 TMP_FILE="/tmp/Claude.dmg"
 MOUNT_POINT="/Volumes/Claude"
