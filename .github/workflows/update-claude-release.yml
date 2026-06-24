@@ -17,32 +17,34 @@ jobs:
       - name: Get latest Claude DMG URL and version
         id: anthropic
         run: |
-          # Follow all redirects and capture the final URL
-          DMG_URL=$(curl -sL \
-            -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
-            -o /dev/null \
-            -w '%{url_effective}' \
-            "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect")
+          # Use Homebrew's public cask API — always has the latest version + direct URL
+          CASK_JSON=$(curl -sf "https://formulae.brew.sh/api/cask/claude.json")
 
-          if [ -z "$DMG_URL" ]; then
-            echo "ERROR: Could not resolve Claude DMG redirect URL"
+          if [ -z "$CASK_JSON" ]; then
+            echo "ERROR: Could not fetch Homebrew cask info for Claude"
             exit 1
           fi
 
-          echo "Resolved DMG URL: $DMG_URL"
+          VERSION=$(echo "$CASK_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['version'])")
+          DMG_URL=$(echo "$CASK_JSON" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+url = d['url']
+# url may contain a version placeholder like #{version}
+version = d['version']
+print(url.replace('\#{version}', version))
+")
 
-          # Extract version from filename, e.g. Claude-0.10.3-universal.dmg → 0.10.3
-          VERSION=$(basename "$DMG_URL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-
-          if [ -z "$VERSION" ]; then
-            # Fallback: store the full URL hash as a change detector
-            VERSION=$(echo "$DMG_URL" | md5 | head -c 12)
-            echo "Could not parse semver; using URL hash as version: $VERSION"
+          if [ -z "$VERSION" ] || [ -z "$DMG_URL" ]; then
+            echo "ERROR: Could not parse version or URL from cask JSON"
+            echo "$CASK_JSON"
+            exit 1
           fi
 
+          echo "Latest Claude version: $VERSION"
+          echo "DMG URL: $DMG_URL"
           echo "dmg_url=$DMG_URL" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION"  >> "$GITHUB_OUTPUT"
-          echo "Latest Claude version: $VERSION"
 
       - name: Get current release version
         id: current
